@@ -76,11 +76,11 @@ async function assertAggregatorValues(
   msg: string,
 ): Promise<void> {
   const [la, lr, rr, ls1, ls2] = await Promise.all([
-    fluxAggregator.latestAnswer(),
-    fluxAggregator.latestRound(),
-    fluxAggregator.reportingRound(),
-    fluxAggregator.latestSubmission(node1Address).then(res => res[1]),
-    fluxAggregator.latestSubmission(node2Address).then(res => res[1]),
+    fluxAggregator.latestRoundData().then(res => res[1]),
+    fluxAggregator.latestRoundData().then(res => res[0]),
+    fluxAggregator.oracleRoundState(node1Address, 0).then(res => res[1]),
+    fluxAggregator.oracleRoundState(node1Address, 0).then(res => res[2]),
+    fluxAggregator.oracleRoundState(node2Address, 0).then(res => res[2]),
   ])
 
   matchers.bigNum(latestAnswer, la, `${msg} : latest answer`)
