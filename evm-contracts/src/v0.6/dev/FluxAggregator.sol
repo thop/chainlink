@@ -168,9 +168,8 @@ contract FluxAggregator is AggregatorV3Interface, Owned {
     string memory _description
   ) public {
     linkToken = LinkTokenInterface(_link);
-    paymentAmount = _paymentAmount;
-    timeout = _timeout;
-    validator = AggregatorValidatorInterface(_validator);
+    updateFutureRounds(paymentAmount, 0, 0, 0, timeout);
+    setValidator(_validator);
     minSubmissionValue = _minSubmissionValue;
     maxSubmissionValue = _maxSubmissionValue;
     decimals = _decimals;
@@ -613,7 +612,7 @@ contract FluxAggregator is AggregatorV3Interface, Owned {
    * @param _newValidator designates the address of the new validation contract.
    */
   function setValidator(address _newValidator)
-    external
+    public
     onlyOwner()
   {
     address previous = address(validator);
