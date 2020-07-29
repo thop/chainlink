@@ -174,6 +174,7 @@ contract FluxAggregator is AggregatorV3Interface, Owned {
     decimals = _decimals;
     description = _description;
     rounds[0].updatedAt = uint64(block.timestamp.sub(uint256(_timeout)));
+    rounds[0].answeredInRound = 1;
   }
 
   /**

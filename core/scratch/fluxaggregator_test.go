@@ -11,11 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/smartcontractkit/chainlink/core/scratch/gethwrappers/eacaggregatorproxy"
-	"github.com/smartcontractkit/chainlink/core/scratch/gethwrappers/mockv3aggregator"
+	"github.com/smartcontractkit/chainlink/core/scratch/gethwrappers/fluxaggregator"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,11 +34,11 @@ func TestProxy(t *testing.T) {
 	genesisData := core.GenesisAlloc{owner.From: {Balance: oneEth}}
 	gasLimit := eth.DefaultConfig.Miner.GasCeil
 	backend := backends.NewSimulatedBackend(genesisData, gasLimit)
-	aggregatorAddress, _, _, err := mockv3aggregator.DeployMockV3Aggregator(owner, backend, 10, big.NewInt(1))
+	aggregatorAddress, _, _, err := fluxaggregator.DeployFluxAggregator(owner, backend, common.Address{}, big.NewInt(0), 0, common.Address{}, big.NewInt(0), big.NewInt(0), 10, "")
 	require.NoError(t, err)
 	proxyAddress, _, _, err := eacaggregatorproxy.DeployAggregatorProxy(owner, backend, aggregatorAddress)
 	require.NoError(t, err)
-	abi, err := abi.JSON(strings.NewReader(mockv3aggregator.MockV3AggregatorABI))
+	abi, err := abi.JSON(strings.NewReader(fluxaggregator.FluxAggregatorABI))
 	require.NoError(t, err)
 	rawData, err := abi.Pack("latestRoundData")
 	require.NoError(t, err)
