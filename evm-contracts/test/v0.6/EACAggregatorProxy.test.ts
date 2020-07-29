@@ -271,7 +271,7 @@ describe('EACAggregatorProxy', () => {
     })
   })
 
-  describe('gas usage', () => {
+  describe.only('gas usage', () => {
     let aggregator2: contract.Instance<AccessControlledAggregatorFactory>
 
     beforeEach(async () => {
@@ -308,7 +308,7 @@ describe('EACAggregatorProxy', () => {
       await aggregator2.addAccess(proxy.address)
     })
 
-    it('adds a small gas overhead on top of reading directly from the aggregator', async () => {
+    it('#latestAnswer', async () => {
       const tx1 = await testHelper.readLatestAnswer(aggregator2.address)
       const receipt1 = await tx1.wait()
       const tx2 = await testHelper.readLatestAnswer(proxy.address)
@@ -317,7 +317,7 @@ describe('EACAggregatorProxy', () => {
       assert.isAbove(3000, diff?.toNumber() || 3001)
     })
 
-    it('adds a small gas overhead on top of reading directly from the aggregator', async () => {
+    it('#latestRoundData', async () => {
       const tx1 = await testHelper.readLatestRoundData(aggregator2.address)
       const receipt1 = await tx1.wait()
       const tx2 = await testHelper.readLatestRoundData(proxy.address)
