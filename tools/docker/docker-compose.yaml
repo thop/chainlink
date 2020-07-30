@@ -31,6 +31,7 @@ services:
       - chainlink-variables.env
     ports:
       - 6688:6688
+      - 6060:6060
     secrets:
       - node_password
       - apicredentials
@@ -63,6 +64,7 @@ services:
       - chainlink-variables.env
     ports:
       - 6699:6688
+      - 6061:6060
     secrets:
       - node_password
       - apicredentials

@@ -124,7 +124,7 @@ export async function waitForService(
 }
 
 /**
- * assertAsync asserts that a condition is evantually met, with a
+ * assertAsync asserts that a condition is eventually met, with a
  * default timeout of 30 seconds
  *
  * @param f function to run every second and check for truthy return value
@@ -136,31 +136,27 @@ export async function assertAsync(
   errorMessage: string,
   timeout = DEFAULT_TIMEOUT_MS,
 ) {
-  return new Promise((res, rej) => {
-    // eslint-disable-next-line
-    let interval: NodeJS.Timeout, timer: NodeJS.Timeout
-
-    function resolveIfFulfilled(fulfilled: boolean) {
-      if (fulfilled === true) {
-        clearTimeout(timer)
-        clearInterval(interval)
-        res()
-      }
+  let start = new Date().getTime()
+  while (true) {
+    const result = await f()
+    if (result === true) {
+      return
     }
+    if (new Date().getTime() >= start + timeout) {
+      throw new Error(errorMessage)
+    }
+    await sleep(1000)
+  }
+}
 
-    timer = setTimeout(() => {
-      clearInterval(interval)
-      rej(errorMessage)
-    }, timeout)
-
-    interval = setInterval(() => {
-      const result = f()
-      if (result instanceof Promise) {
-        result.then(resolveIfFulfilled)
-      } else {
-        resolveIfFulfilled(result)
-      }
-    }, 1000)
+/**
+ * sleep returns a Promise that resolves after the given number of milliseconds.
+ *
+ * @param ms the number of milliseconds to sleep
+ */
+export function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
   })
 }
 
@@ -177,11 +173,52 @@ export async function assertJobRun(
   count: number,
   errorMessage: string,
 ) {
-  await assertAsync(() => {
+  await assertAsync(async () => {
     const jobRuns = clClient.getJobRuns()
+    console.log('JOB RUNS ~>', clClient.name, jobRuns)
     const jobRun = jobRuns[jobRuns.length - 1]
     return jobRuns.length === count && jobRun.status === 'completed'
   }, `${errorMessage} : job not run on ${clClient.name}`)
+}
+
+/**
+ * forces parity to mimic geth's behavior of mining a block every two seconds, by broadcasting a transaction
+ * at the same interval from the provided account
+ * @param wallet the account to send transactions from
+ * @param interval the target interval at which to send those transactions
+ */
+export function setRecurringTx(wallet: ethers.Wallet, interval = 2000): number {
+  // let waitingForTx = false
+
+  // const maybeBroadcast = async () => {
+  //   if (waitingForTx) return
+  //   waitingForTx = true
+  //   const receipt = wallet
+  //     .sendTransaction({
+  //       to: ethers.constants.AddressZero,
+  //       value: 0,
+  //     })
+  //     .then(txWait)
+  //   const timer = wait(interval)
+  //   await Promise.all([receipt, timer])
+  //   waitingForTx = false
+  // }
+
+  // return (setInterval(maybeBroadcast, 100) as unknown) as number
+  return (setInterval(async () => {
+      try {
+    const tx = await wallet
+      .sendTransaction({
+        to: ethers.constants.AddressZero,
+        value: 0,
+      })
+    console.log('tx ~>', tx)
+    const receipt = await tx.wait()
+    console.log('receipt ~>', receipt)
+} catch (err) {
+    console.log('ERROR SENDING TX ~>', err)
+}
+  }, interval) as unknown) as number
 }
 
 /**

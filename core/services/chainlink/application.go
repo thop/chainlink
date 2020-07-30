@@ -3,6 +3,8 @@ package chainlink
 import (
 	"context"
 	stderr "errors"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
@@ -79,6 +81,10 @@ type ChainlinkApplication struct {
 // the logger at the same directory and returns the Application to
 // be used by the node.
 func NewApplication(config *orm.Config, onConnectCallbacks ...func(Application)) Application {
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
+
 	shutdownSignal := gracefulpanic.NewSignal()
 	store := strpkg.NewStore(config, shutdownSignal)
 	config.SetRuntimeStore(store.ORM)

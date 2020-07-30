@@ -66,6 +66,7 @@ let fluxAggregator: contract.Instance<FluxAggregatorFactory>
 
 let node1Address: string
 let node2Address: string
+let txInterval: number | undefined
 
 async function assertAggregatorValues(
   latestAnswer: number,
@@ -111,6 +112,12 @@ beforeAll(async () => {
   linkToken = await linkTokenFactory.deploy()
   await linkToken.deployed()
 
+  // if (!process.env.GETH_MODE) {
+    const miner = ethers.Wallet.createRandom().connect(provider)
+    await t.fundAddress(miner.address)
+    txInterval = t.setRecurringTx(miner)
+  // }
+
   console.log(`Chainlink Node 1 address: ${node1Address}`)
   console.log(`Chainlink Node 2 address: ${node2Address}`)
   console.log(`Contract creator's address: ${carol.address}`)
@@ -125,7 +132,7 @@ beforeEach(async () => {
   const deployingContract = await fluxAggregatorFactory.deploy(
     linkToken.address,
     MINIMUM_CONTRACT_PAYMENT,
-    10,
+    300,
     emptyAddress,
     minSubmissionValue,
     maxSubmissionValue,
@@ -139,7 +146,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await Promise.all([clClient1.unpause(), clClient2.unpause()])
   clClient1.getJobs().forEach(job => clClient1.archiveJob(job.id))
   clClient2.getJobs().forEach(job => clClient2.archiveJob(job.id))
   await Promise.all([
@@ -147,6 +153,10 @@ afterEach(async () => {
     t.changePriceFeed(EXTERNAL_ADAPTER_2_URL, 100),
   ])
   fluxAggregator.removeAllListeners('*')
+})
+
+afterAll(() => {
+  clearInterval(txInterval)
 })
 
 describe('FluxMonitor / FluxAggregator integration with one node', () => {
@@ -227,30 +237,33 @@ describe('FluxMonitor / FluxAggregator integration with two nodes', () => {
 
     fluxMonitorJob.initiators[0].params.address = fluxAggregator.address
     fluxMonitorJob.initiators[0].params.feeds = [EXTERNAL_ADAPTER_URL]
-    clClient1.createJob(JSON.stringify(fluxMonitorJob))
+    const fmJob1 = JSON.stringify(fluxMonitorJob)
+    clClient1.createJob(fmJob1)
     fluxMonitorJob.initiators[0].params.feeds = [EXTERNAL_ADAPTER_2_URL]
-    clClient2.createJob(JSON.stringify(fluxMonitorJob))
+    const fmJob2 = JSON.stringify(fluxMonitorJob)
+    clClient2.createJob(fmJob2)
 
     // initial job run
-    await t.assertJobRun(clClient1, node1InitialRunCount + 1, 'initial update')
-    await t.assertJobRun(clClient2, node2InitialRunCount + 1, 'initial update')
+    await t.assertJobRun(clClient1, node1InitialRunCount + 1, 'initial update, node 1')
+    await t.assertJobRun(clClient2, node2InitialRunCount + 1, 'initial update, node 2')
     await assertAggregatorValues(10000, 1, 2, 2, 2, 'initial round')
-    await clClient1.pause()
-    await clClient2.pause()
 
     // node 1 should still begin round even with unresponsive node 2
+    await clClient2.pause()
     await t.changePriceFeed(EXTERNAL_ADAPTER_URL, 110)
     await t.changePriceFeed(EXTERNAL_ADAPTER_2_URL, 120)
-    await clClient1.unpause()
-    await t.assertJobRun(clClient1, node1InitialRunCount + 2, 'second update')
+    await t.assertJobRun(clClient1, node1InitialRunCount + 2, 'second update, node 1')
     await assertAggregatorValues(10000, 1, 2, 2, 2, 'node 1 only')
-    await clClient1.pause()
 
     // node 2 should finish round
     await clClient2.unpause()
-    await t.assertJobRun(clClient2, node2InitialRunCount + 2, 'second update')
-    await assertAggregatorValues(11500, 2, 3, 3, 3, 'second round')
+    await t.assertJobRun(clClient2, node2InitialRunCount + 2, 'second update, node 2')
+    let run = clClient2.getJobRuns()[0]
     await clClient2.pause()
+    let txHash = run.result.data.result as string
+    let txReceipt = await carol.provider.getTransactionReceipt(txHash)
+    console.log('receipt ~>', txReceipt)
+    await assertAggregatorValues(11500, 2, 3, 3, 3, 'second round')
 
     // reduce minAnswers to 1
     await (
@@ -259,21 +272,17 @@ describe('FluxMonitor / FluxAggregator integration with two nodes', () => {
         1,
         2,
         0,
-        5,
+        300,
       )
     ).wait()
     await t.changePriceFeed(EXTERNAL_ADAPTER_URL, 130)
-    await clClient1.unpause()
     await t.assertJobRun(clClient1, node1InitialRunCount + 3, 'third update')
     await assertAggregatorValues(13000, 3, 3, 4, 3, 'third round')
-    await clClient1.pause()
 
     // node should continue to start new rounds alone
     await t.changePriceFeed(EXTERNAL_ADAPTER_URL, 140)
-    await clClient1.unpause()
     await t.assertJobRun(clClient1, node1InitialRunCount + 4, 'fourth update')
     await assertAggregatorValues(14000, 4, 4, 5, 4, 'fourth round')
-
     await clClient2.unpause()
   })
 
@@ -301,6 +310,10 @@ describe('FluxMonitor / FluxAggregator integration with two nodes', () => {
     fluxMonitorJob.initiators[0].params.feeds = [EXTERNAL_ADAPTER_2_URL]
     clClient2.createJob(JSON.stringify(fluxMonitorJob))
 
+    function pause(clClient: ChainlinkClient) {
+      clClient.getJobs().forEach(job => clClient.archiveJob(job.id))
+    }
+
     // initial job run
     await t.assertJobRun(clClient1, node1InitialRunCount + 1, 'initial update')
     await t.assertJobRun(clClient2, node2InitialRunCount + 1, 'initial update')
@@ -312,7 +325,7 @@ describe('FluxMonitor / FluxAggregator integration with two nodes', () => {
     await assertAggregatorValues(10000, 2, 3, 3, 3, 'second round')
 
     // third job run without node 2
-    await clClient2.pause()
+    pause(clClient2)
     await t.assertJobRun(clClient1, node1InitialRunCount + 3, 'third update')
     await assertAggregatorValues(10000, 2, 3, 3, 3, 'third round')
   })
